@@ -4,20 +4,25 @@ import re
 host = "8.8.8.8"
 
 result = subprocess.run(
-    ["ping", "-n", "1", host],
+    ["ping", "-n", "4", host],
     capture_output=True,
     text=True
 )
 
 if result.returncode == 0:
-    match = re.search(r"time[=<](\d+)ms", result.stdout)
+    received_match = re.search(r"Received = (\d+)", result.stdout)
+    loss_match = re.search(r"\((\d+)% loss\)", result.stdout)
 
-    if match:
-        latency = int(match.group(1))
+    if received_match and loss_match:
+        received = int(received_match.group(1))
+        packet_loss = int(loss_match.group(1))
+
         print(f"{host} is UP")
-        print(f"Latency: {latency} ms")
+        print(f"Packets received: {received}/4")
+        print(f"Packet loss: {packet_loss}%")
     else:
         print(f"{host} is UP")
-        print("Latency: Could not determine")
+        print("Packet loss: Could not determine")
 else:
     print(f"{host} is DOWN")
+    print("Packet loss: 100%")
