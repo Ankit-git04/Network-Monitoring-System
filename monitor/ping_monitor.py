@@ -12,17 +12,23 @@ result = subprocess.run(
 if result.returncode == 0:
     received_match = re.search(r"Received = (\d+)", result.stdout)
     loss_match = re.search(r"\((\d+)% loss\)", result.stdout)
+    latency_match = re.search(r"Average = (\d+)ms", result.stdout)
+
+    print(f"{host} is UP")
 
     if received_match and loss_match:
         received = int(received_match.group(1))
         packet_loss = int(loss_match.group(1))
 
-        print(f"{host} is UP")
         print(f"Packets received: {received}/4")
         print(f"Packet loss: {packet_loss}%")
+
+    if latency_match:
+        latency = int(latency_match.group(1))
+        print(f"Average latency: {latency} ms")
     else:
-        print(f"{host} is UP")
-        print("Packet loss: Could not determine")
+        print("Average latency: Could not determine")
+
 else:
     print(f"{host} is DOWN")
     print("Packet loss: 100%")
