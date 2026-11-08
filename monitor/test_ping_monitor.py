@@ -35,5 +35,36 @@ class TestPingMonitor(unittest.TestCase):
         result = ping_monitor.check_host("192.168.1.99")
         self.assertFalse(result)
 
+
+    def test_detect_fault_no_fault(self):
+     self.assertEqual(
+        ping_monitor.detect_fault("UP", 50, 0),
+        "No Fault"
+    )
+
+    def test_detect_fault_high_latency(self):
+        self.assertEqual(
+            ping_monitor.detect_fault("UP", 250, 0),
+            "High Latency"
+        )
+
+    def test_detect_fault_high_packet_loss(self):
+      self.assertEqual(
+        ping_monitor.detect_fault("UP", 50, 30),
+        "High Packet Loss"
+    )
+
+    def test_detect_fault_down(self):
+        self.assertEqual(
+        ping_monitor.detect_fault("DOWN"),
+        "Connectivity Fault"
+    )
+
+    def test_detect_fault_timeout(self):
+        self.assertEqual(
+        ping_monitor.detect_fault("TIMEOUT"),
+        "Timeout Fault"
+    )
+
 if __name__ == '__main__':
     unittest.main()

@@ -50,13 +50,21 @@ def check_host(host):
             return True
 
         else:
-            print("Status: DOWN")
-            print("Packet loss: 100%")
+            print("Status: DOWN")            
+            print("Packet loss: 100%")            
+
+            fault = detect_fault("DOWN")
+            print(f"Fault: {fault}")
+
             return False
             
     except subprocess.TimeoutExpired:
         print("Status: TIMEOUT")
         print("Packet loss: 100%")
+
+        fault = detect_fault("TIMEOUT")
+        print(f"Fault: {fault}")
+
         return False
 
 def detect_fault(status, latency=None, packet_loss=None):
