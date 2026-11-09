@@ -1,6 +1,7 @@
 import subprocess
 import re
 import time
+import socket
 
 hosts = [
     "8.8.8.8",
@@ -53,7 +54,7 @@ def check_host(host):
 
         else:
             track_recovery(host, "DOWN")
-            
+
             print("Status: DOWN")            
             print("Packet loss: 100%")            
 
@@ -88,6 +89,7 @@ def detect_fault(status, latency=None, packet_loss=None):
 
     return "No Fault"  
 
+
 def track_recovery(host, current_status):
     if host in previous_status:
         old_status = previous_status[host]
@@ -95,16 +97,40 @@ def track_recovery(host, current_status):
         if old_status != "UP" and current_status == "UP":
             print(f"FAULT RECOVERED: {host}")
 
-    previous_status[host] = current_status     
+    previous_status[host] = current_status    
+
+
+def check_tcp_port(host, port):
+    try:
+        with socket.create_connection((host, port), timeout=3):
+            print(f"TCP Port {port}: OPEN")
+            return True
+
+    except socket.timeout:
+        print(f"TCP Port {port}: TIMEOUT")
+        return False
+
+    except ConnectionRefusedError:
+        print(f"TCP Port {port}: CLOSED")
+        return False
+
+    except OSError as error:
+        print(f"TCP Port {port}: UNREACHABLE ({error})")
+        return False
 
 def main():
     while True:
         print("\n===== Network Monitoring =====")
+
         for host in hosts:
             check_host(host)
 
+            print("\n--- TCP Port Monitoring ---")
+            check_tcp_port(host, 443)
+
         print("\nWaiting 5 seconds before next check...")
         time.sleep(5)
+
 
 if __name__ == "__main__":
     main()
