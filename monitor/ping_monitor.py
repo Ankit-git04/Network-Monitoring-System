@@ -6,6 +6,7 @@ hosts = [
     "8.8.8.8",
     "1.1.1.1"
 ]
+previous_status = {}
 
 def check_host(host):
     print(f"\nChecking {host}...")
@@ -18,6 +19,7 @@ def check_host(host):
         )
 
         if result.returncode == 0:
+            track_recovery(host, "UP")
             received_match = re.search(r"Received = (\d+)", result.stdout)
             loss_match = re.search(r"\((\d+)% loss\)", result.stdout)
             latency_match = re.search(r"Average = (\d+)ms", result.stdout)
@@ -50,6 +52,8 @@ def check_host(host):
             return True
 
         else:
+            track_recovery(host, "DOWN")
+            
             print("Status: DOWN")            
             print("Packet loss: 100%")            
 
@@ -59,6 +63,8 @@ def check_host(host):
             return False
             
     except subprocess.TimeoutExpired:
+        track_recovery(host, "TIMEOUT")
+
         print("Status: TIMEOUT")
         print("Packet loss: 100%")
 
@@ -80,7 +86,16 @@ def detect_fault(status, latency=None, packet_loss=None):
     if latency is not None and latency > 200:
         return "High Latency"
 
-    return "No Fault"       
+    return "No Fault"  
+
+def track_recovery(host, current_status):
+    if host in previous_status:
+        old_status = previous_status[host]
+
+        if old_status != "UP" and current_status == "UP":
+            print(f"FAULT RECOVERED: {host}")
+
+    previous_status[host] = current_status     
 
 def main():
     while True:
