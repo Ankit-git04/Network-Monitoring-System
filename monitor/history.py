@@ -122,4 +122,21 @@ def generate_device_report(host):
 
     return report
 
+def generate_all_device_reports():
+    records = load_monitoring_history()
+
+    hosts = list(dict.fromkeys(
+        record["host"] for record in records
+    ))
+
+    reports = []
+
+    for host in hosts:
+        report = generate_device_report(host)
+
+        if report is not None:
+            reports.append(report)
+
+    return reports
+
 
