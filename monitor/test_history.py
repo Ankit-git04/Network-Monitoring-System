@@ -171,5 +171,31 @@ class TestMonitoringHistory(unittest.TestCase):
         self.assertEqual(counts["DOWN"], 0)
 
 
+
+
+    def test_calculate_device_availability(self):
+     sample_records = [
+        {"host": "8.8.8.8", "status": "UP"},
+        {"host": "8.8.8.8", "status": "UP"},
+        {"host": "8.8.8.8", "status": "UP"},
+        {"host": "8.8.8.8", "status": "DOWN"}
+     ]
+
+     with open(self.history_file, "w") as file:
+        for record in sample_records:
+            file.write(json.dumps(record) + "\n")
+
+     availability = history.calculate_device_availability("8.8.8.8")
+
+     self.assertEqual(availability, 75.0)
+
+
+    def test_calculate_device_availability_empty(self):
+     availability = history.calculate_device_availability("10.0.0.1")
+
+     self.assertEqual(availability, 0)
+
+
+
 if __name__ == "__main__":
     unittest.main()

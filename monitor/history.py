@@ -75,4 +75,18 @@ def get_device_status_count(host):
     }
 
 
+def calculate_device_availability(host):
+    counts = get_device_status_count(host)
+
+    total_checks = counts["UP"] + counts["DOWN"]
+
+    if total_checks == 0:
+        return 0
+
+    availability = (counts["UP"] / total_checks) * 100
+
+    return round(availability, 2)
+
+    
+
 
