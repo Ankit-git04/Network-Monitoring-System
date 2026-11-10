@@ -7,7 +7,9 @@ hosts = [
     "8.8.8.8",
     "1.1.1.1"
 ]
+
 previous_status = {}
+previous_tcp_status = {}
 
 def check_host(host):
     print(f"\nChecking {host}...")
@@ -97,25 +99,42 @@ def track_recovery(host, current_status):
         if old_status != "UP" and current_status == "UP":
             print(f"FAULT RECOVERED: {host}")
 
-    previous_status[host] = current_status    
+    previous_status[host] = current_status   
+
+
+
+def track_tcp_recovery(host, port, current_status):
+    key = f"{host}:{port}"
+
+    if key in previous_tcp_status:
+        old_status = previous_tcp_status[key]
+
+        if old_status != "OPEN" and current_status == "OPEN":
+            print(f"TCP FAULT RECOVERED: {key}")
+
+    previous_tcp_status[key] = current_status 
 
 
 def check_tcp_port(host, port):
     try:
         with socket.create_connection((host, port), timeout=3):
             print(f"TCP Port {port}: OPEN")
+            track_tcp_recovery(host, port, "OPEN")
             return "OPEN"
 
     except socket.timeout:
         print(f"TCP Port {port}: TIMEOUT")
+        track_tcp_recovery(host, port, "TIMEOUT")
         return "TIMEOUT"
 
     except ConnectionRefusedError:
         print(f"TCP Port {port}: CLOSED")
+        track_tcp_recovery(host, port, "CLOSED")
         return "CLOSED"
 
     except OSError as error:
         print(f"TCP Port {port}: UNREACHABLE ({error})")
+        track_tcp_recovery(host, port, "UNREACHABLE")
         return "UNREACHABLE"
 
 

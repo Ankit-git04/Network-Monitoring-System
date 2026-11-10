@@ -3,6 +3,7 @@ from unittest.mock import patch, MagicMock
 import subprocess
 from monitor import ping_monitor
 import socket
+from monitor.ping_monitor import track_tcp_recovery, previous_tcp_status
 
 class TestPingMonitor(unittest.TestCase):
 
@@ -115,6 +116,28 @@ class TestPingMonitor(unittest.TestCase):
         self.assertEqual(
             ping_monitor.detect_tcp_fault("UNREACHABLE"),
             "Network Unreachable"
+        )
+
+    def test_tcp_recovery_closed_to_open(self):
+        previous_tcp_status.clear()
+
+        track_tcp_recovery("google.com", 443, "CLOSED")
+        track_tcp_recovery("google.com", 443, "OPEN")
+
+        self.assertEqual(
+            previous_tcp_status["google.com:443"],
+            "OPEN"
+        )
+
+    def test_tcp_recovery_remains_closed(self):
+        previous_tcp_status.clear()
+
+        track_tcp_recovery("google.com", 443, "CLOSED")
+        track_tcp_recovery("google.com", 443, "CLOSED")
+
+        self.assertEqual(
+            previous_tcp_status["google.com:443"],
+            "CLOSED"
         )
 
     
