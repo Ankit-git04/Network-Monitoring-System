@@ -3,6 +3,7 @@ import re
 import time
 import socket
 import json
+from monitor.history import save_monitoring_result
 
 
 previous_status = {}
@@ -276,6 +277,8 @@ def monitor_all_devices():
         ping_result["tcp_status"] = tcp_status
         ping_result["tcp_fault"] = tcp_fault
 
+        save_monitoring_result(ping_result)
+
         results.append(ping_result)
 
     return results
@@ -298,4 +301,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    

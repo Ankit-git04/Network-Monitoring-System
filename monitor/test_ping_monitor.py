@@ -286,9 +286,12 @@ class TestPingMonitor(unittest.TestCase):
 
 
     
+    @patch("monitor.ping_monitor.save_monitoring_result")
     @patch("monitor.ping_monitor.check_tcp_port")
     @patch("monitor.ping_monitor.check_host")
-    def test_monitor_all_devices(self, mock_check_host, mock_check_tcp_port):
+    def test_monitor_all_devices(
+        self, mock_check_host, mock_check_tcp_port, mock_save_result
+    ):
 
         mock_devices = [
             {
