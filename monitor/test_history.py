@@ -241,8 +241,48 @@ class TestMonitoringHistory(unittest.TestCase):
 
         self.assertIsNone(average)
 
-        
+    
+    def test_generate_device_report(self):
+        sample_records = [
+            {
+                "host": "8.8.8.8",
+                "status": "UP",
+                "latency": 50,
+                "packet_loss": 0
+            },
+            {
+                "host": "8.8.8.8",
+                "status": "UP",
+                "latency": 30,
+                "packet_loss": 10
+            },
+            {
+                "host": "8.8.8.8",
+                "status": "DOWN",
+                "latency": None,
+                "packet_loss": 100
+            }
+        ]
 
+        with open(self.history_file, "w") as file:
+            for record in sample_records:
+                file.write(json.dumps(record) + "\n")
+
+        report = history.generate_device_report("8.8.8.8")
+
+        self.assertEqual(report["host"], "8.8.8.8")
+        self.assertEqual(report["total_checks"], 3)
+        self.assertEqual(report["up_count"], 2)
+        self.assertEqual(report["down_count"], 1)
+        self.assertEqual(report["availability"], 66.67)
+        self.assertEqual(report["average_latency"], 40)
+        self.assertEqual(report["average_packet_loss"], 36.67)
+
+
+    def test_generate_device_report_empty(self):
+        report = history.generate_device_report("10.0.0.1")
+
+        self.assertIsNone(report)
 
 if __name__ == "__main__":
     unittest.main()

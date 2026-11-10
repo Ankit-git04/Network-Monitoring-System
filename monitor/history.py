@@ -102,6 +102,24 @@ def calculate_average_packet_loss(host):
 
     return round(sum(packet_losses) / len(packet_losses), 2)
 
+def generate_device_report(host):
+    records = get_device_history(host)
 
+    if not records:
+        return None
+
+    counts = get_device_status_count(host)
+
+    report = {
+        "host": host,
+        "total_checks": len(records),
+        "up_count": counts["UP"],
+        "down_count": counts["DOWN"],
+        "availability": calculate_device_availability(host),
+        "average_latency": calculate_average_latency(host),
+        "average_packet_loss": calculate_average_packet_loss(host)
+    }
+
+    return report
 
 
