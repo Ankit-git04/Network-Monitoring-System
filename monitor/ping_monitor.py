@@ -2,11 +2,18 @@ import subprocess
 import re
 import time
 import socket
+import json
 
-hosts = [
-    "8.8.8.8",
-    "1.1.1.1"
-]
+def load_devices():
+    config_path = "config/devices.json"
+
+    with open(config_path, "r") as file:
+        devices = json.load(file)
+
+    return devices
+
+
+devices = load_devices()
 
 previous_status = {}
 previous_tcp_status = {}
@@ -21,11 +28,11 @@ def check_host(host):
             timeout=10
         )
 
-        if result.returncode == 0:
+        if (result.returncode == 0 and "Destination net unreachable" not in result.stdout and "Request timed out" not in result.stdout):
             track_recovery(host, "UP")
             received_match = re.search(r"Received = (\d+)", result.stdout)
             loss_match = re.search(r"\((\d+)% loss\)", result.stdout)
-            latency_match = re.search(r"Average = (\d+)ms", result.stdout)
+            latency_match = re.search(r"Average\s*=\s*(\d+)\s*ms",result.stdout,re.IGNORECASE)
 
             print("Status: UP")
             
@@ -154,11 +161,20 @@ def main():
     while True:
         print("\n===== Network Monitoring =====")
 
-        for host in hosts:
+        for device in devices:
+            name = device["name"]
+            host = device["host"]
+            device_type = device["type"]
+            port = device["tcp_port"]
+
+            print(f"\nDevice: {name}")    
+            print(f"Type: {device_type}")
+            print(f"IP Address: {host}")    
+
             check_host(host)
 
             print("\n--- TCP Port Monitoring ---")
-            tcp_status = check_tcp_port(host, 443)
+            tcp_status = check_tcp_port(host, port)
 
             tcp_fault = detect_tcp_fault(tcp_status)
             print(f"TCP Fault: {tcp_fault}")

@@ -1,0 +1,20 @@
+[
+    {
+        "name": "Google DNS",
+        "host": "8.8.8.8",
+        "type": "DNS Server",
+        "tcp_port": 443
+    },
+    {
+        "name": "Cloudflare DNS",
+        "host": "1.1.1.1",
+        "type": "DNS Server",
+        "tcp_port": 443
+    },
+    {
+        "name": "Local Gateway",
+        "host": "192.168.1.1",
+        "type": "Router",
+        "tcp_port": 80
+    }
+]
