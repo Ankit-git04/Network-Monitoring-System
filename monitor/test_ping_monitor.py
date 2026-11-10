@@ -16,7 +16,11 @@ class TestPingMonitor(unittest.TestCase):
         mock_run.return_value = mock_result
 
         result = ping_monitor.check_host("8.8.8.8")
-        self.assertTrue(result)
+        self.assertEqual(result["status"], "UP")
+        self.assertEqual(result["latency"], 10)
+        self.assertEqual(result["packet_loss"], 0)
+        self.assertEqual(result["received"], 4)
+        self.assertEqual(result["fault"], "No Fault")
         mock_run.assert_called_with(["ping", "-n", "4", "8.8.8.8"], capture_output=True, text=True, timeout=10)
 
     @patch('monitor.ping_monitor.subprocess.run')
@@ -24,10 +28,16 @@ class TestPingMonitor(unittest.TestCase):
         # Mock failed ping response
         mock_result = MagicMock()
         mock_result.returncode = 1
+        mock_result.stdout = ""
         mock_run.return_value = mock_result
 
         result = ping_monitor.check_host("192.168.1.99")
-        self.assertFalse(result)
+
+        self.assertEqual(result["status"], "DOWN")
+        self.assertIsNone(result["latency"])
+        self.assertEqual(result["packet_loss"], 100)
+        self.assertEqual(result["received"], 0)
+        self.assertEqual(result["fault"], "Connectivity Fault")
 
     @patch('monitor.ping_monitor.subprocess.run')
     def test_check_host_timeout(self, mock_run):
@@ -35,7 +45,12 @@ class TestPingMonitor(unittest.TestCase):
         mock_run.side_effect = subprocess.TimeoutExpired(cmd=["ping"], timeout=10)
 
         result = ping_monitor.check_host("192.168.1.99")
-        self.assertFalse(result)
+
+        self.assertEqual(result["status"], "TIMEOUT")
+        self.assertIsNone(result["latency"])
+        self.assertEqual(result["packet_loss"], 100)
+        self.assertEqual(result["received"], 0)
+        self.assertEqual(result["fault"], "Timeout Fault")
 
 
     def test_detect_fault_no_fault(self):

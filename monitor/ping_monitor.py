@@ -73,6 +73,11 @@ devices = load_devices()
 
 def check_host(host):
     print(f"\nChecking {host}...")
+    latency = None
+    packet_loss = None
+    received = 0
+    status = None
+    fault = None
     try:
         result = subprocess.run(
             ["ping", "-n", "4", host],
@@ -83,11 +88,12 @@ def check_host(host):
 
         if (result.returncode == 0 and "Destination net unreachable" not in result.stdout and "Request timed out" not in result.stdout):
             track_recovery(host, "UP")
+            status = "UP"
             received_match = re.search(r"Received = (\d+)", result.stdout)
             loss_match = re.search(r"\((\d+)% loss\)", result.stdout)
             latency_match = re.search(r"Average\s*=\s*(\d+)\s*ms",result.stdout,re.IGNORECASE)
 
-            print("Status: UP")
+            print(f"Status: {status}")
             
 
             if received_match and loss_match:
@@ -114,29 +120,56 @@ def check_host(host):
             
             print(f"Fault: {fault}")
             
-            return True
+            return {
+                    "host": host,
+                    "status": status,
+                    "latency": latency,
+                    "packet_loss": packet_loss,
+                    "received": received,
+                    "fault": fault
+                }
 
         else:
             track_recovery(host, "DOWN")
 
-            print("Status: DOWN")            
-            print("Packet loss: 100%")            
+            status = "DOWN"
+            packet_loss = 100
+
+            print(f"Status: {status}")
+            print(f"Packet loss: {packet_loss}%")            
 
             fault = detect_fault("DOWN")
             print(f"Fault: {fault}")
 
-            return False
-            
+            return {
+                "host": host,
+                "status": status,
+                "latency": latency,
+                "packet_loss": packet_loss,
+                "received": received,
+                "fault": fault
+            }
+                        
     except subprocess.TimeoutExpired:
         track_recovery(host, "TIMEOUT")
 
-        print("Status: TIMEOUT")
-        print("Packet loss: 100%")
+        status = "TIMEOUT"
+        packet_loss = 100
+
+        print(f"Status: {status}")
+        print(f"Packet loss: {packet_loss}%")
 
         fault = detect_fault("TIMEOUT")
         print(f"Fault: {fault}")
 
-        return False
+        return {
+                "host": host,
+                "status": status,
+                "latency": latency,
+                "packet_loss": packet_loss,
+                "received": received,
+                "fault": fault
+            }
 
 def detect_fault(status, latency=None, packet_loss=None,
                  latency_threshold=200, packet_loss_threshold=20):
