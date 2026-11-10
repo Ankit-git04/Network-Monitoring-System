@@ -196,6 +196,53 @@ class TestMonitoringHistory(unittest.TestCase):
      self.assertEqual(availability, 0)
 
 
+    def test_calculate_average_packet_loss(self):
+        sample_records = [
+            {"host": "8.8.8.8", "packet_loss": 0},
+            {"host": "8.8.8.8", "packet_loss": 20},
+            {"host": "8.8.8.8", "packet_loss": 10}
+        ]
+
+        with open(self.history_file, "w") as file:
+            for record in sample_records:
+                file.write(json.dumps(record) + "\n")
+
+        average = history.calculate_average_packet_loss("8.8.8.8")
+
+        self.assertEqual(average, 10.0)
+
+
+    def test_average_packet_loss_ignores_none(self):
+        sample_records = [
+            {"host": "8.8.8.8", "packet_loss": 20},
+            {"host": "8.8.8.8", "packet_loss": None},
+            {"host": "8.8.8.8", "packet_loss": 40}
+        ]
+
+        with open(self.history_file, "w") as file:
+            for record in sample_records:
+                file.write(json.dumps(record) + "\n")
+
+        average = history.calculate_average_packet_loss("8.8.8.8")
+
+        self.assertEqual(average, 30.0)
+
+    def test_average_packet_loss_no_values(self):
+        sample_records = [
+            {"host": "8.8.8.8", "packet_loss": None},
+            {"host": "8.8.8.8", "packet_loss": None}
+        ]
+
+        with open(self.history_file, "w") as file:
+            for record in sample_records:
+                file.write(json.dumps(record) + "\n")
+
+        average = history.calculate_average_packet_loss("8.8.8.8")
+
+        self.assertIsNone(average)
+
+        
+
 
 if __name__ == "__main__":
     unittest.main()

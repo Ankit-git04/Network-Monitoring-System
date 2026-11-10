@@ -87,6 +87,21 @@ def calculate_device_availability(host):
 
     return round(availability, 2)
 
-    
+
+def calculate_average_packet_loss(host):
+    records = get_device_history(host)
+
+    packet_losses = [
+        record["packet_loss"]
+        for record in records
+        if record.get("packet_loss") is not None
+    ]
+
+    if not packet_losses:
+        return None
+
+    return round(sum(packet_losses) / len(packet_losses), 2)
+
+
 
 
