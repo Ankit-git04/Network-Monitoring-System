@@ -104,19 +104,32 @@ def check_tcp_port(host, port):
     try:
         with socket.create_connection((host, port), timeout=3):
             print(f"TCP Port {port}: OPEN")
-            return True
+            return "OPEN"
 
     except socket.timeout:
         print(f"TCP Port {port}: TIMEOUT")
-        return False
+        return "TIMEOUT"
 
     except ConnectionRefusedError:
         print(f"TCP Port {port}: CLOSED")
-        return False
+        return "CLOSED"
 
     except OSError as error:
         print(f"TCP Port {port}: UNREACHABLE ({error})")
-        return False
+        return "UNREACHABLE"
+
+
+def detect_tcp_fault(tcp_status):
+    if tcp_status == "CLOSED":
+        return "Service Unavailable"
+
+    if tcp_status == "TIMEOUT":
+        return "Service Timeout"
+
+    if tcp_status == "UNREACHABLE":
+        return "Network Unreachable"
+
+    return "No Fault"
 
 def main():
     while True:
@@ -126,7 +139,10 @@ def main():
             check_host(host)
 
             print("\n--- TCP Port Monitoring ---")
-            check_tcp_port(host, 443)
+            tcp_status = check_tcp_port(host, 443)
+
+            tcp_fault = detect_tcp_fault(tcp_status)
+            print(f"TCP Fault: {tcp_fault}")
 
         print("\nWaiting 5 seconds before next check...")
         time.sleep(5)

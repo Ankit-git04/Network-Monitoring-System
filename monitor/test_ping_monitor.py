@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import patch, MagicMock
 import subprocess
 from monitor import ping_monitor
+import socket
 
 class TestPingMonitor(unittest.TestCase):
 
@@ -65,6 +66,58 @@ class TestPingMonitor(unittest.TestCase):
         ping_monitor.detect_fault("TIMEOUT"),
         "Timeout Fault"
     )
+
+    @patch('monitor.ping_monitor.socket.create_connection')
+    def test_check_tcp_port_open(self, mock_connection):
+        mock_connection.return_value.__enter__.return_value = MagicMock()
+
+        result = ping_monitor.check_tcp_port("google.com", 443)
+
+        self.assertEqual(result, "OPEN")
+
+    @patch('monitor.ping_monitor.socket.create_connection')
+    def test_check_tcp_port_closed(self, mock_connection):
+        mock_connection.side_effect = ConnectionRefusedError
+
+        result = ping_monitor.check_tcp_port("127.0.0.1", 81)
+
+        self.assertEqual(result, "CLOSED")
+
+    @patch('monitor.ping_monitor.socket.create_connection')
+    def test_check_tcp_port_timeout(self, mock_connection):
+        mock_connection.side_effect = socket.timeout
+
+        result = ping_monitor.check_tcp_port("server", 22)
+
+        self.assertEqual(result, "TIMEOUT")
+
+    @patch('monitor.ping_monitor.socket.create_connection')
+    def test_check_tcp_port_unreachable(self, mock_connection):
+        mock_connection.side_effect = OSError("Network is unreachable")
+
+        result = ping_monitor.check_tcp_port("192.168.1.99", 443)
+
+        self.assertEqual(result, "UNREACHABLE")
+
+    def test_detect_tcp_fault_closed(self):
+        self.assertEqual(
+            ping_monitor.detect_tcp_fault("CLOSED"),
+            "Service Unavailable"
+        )
+
+    def test_detect_tcp_fault_timeout(self):
+        self.assertEqual(
+            ping_monitor.detect_tcp_fault("TIMEOUT"),
+            "Service Timeout"
+        )
+
+    def test_detect_tcp_fault_unreachable(self):
+        self.assertEqual(
+            ping_monitor.detect_tcp_fault("UNREACHABLE"),
+            "Network Unreachable"
+        )
+
+    
 
 if __name__ == '__main__':
     unittest.main()
