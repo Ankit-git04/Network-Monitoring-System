@@ -247,31 +247,55 @@ def detect_tcp_fault(tcp_status):
 
     return "No Fault"
 
+
+def monitor_all_devices():
+    results = []
+
+    for device in devices:
+        name = device["name"]
+        host = device["host"]
+        device_type = device["type"]
+        port = device["tcp_port"]
+
+        print(f"\nDevice: {name}")
+        print(f"Type: {device_type}")
+        print(f"IP Address: {host}")
+
+        ping_result = check_host(host)
+
+        ping_result["name"] = name
+        ping_result["type"] = device_type
+
+        print("\n--- TCP Port Monitoring ---")
+        tcp_status = check_tcp_port(host, port)
+
+        tcp_fault = detect_tcp_fault(tcp_status)
+        print(f"TCP Fault: {tcp_fault}")
+
+        ping_result["tcp_port"] = port
+        ping_result["tcp_status"] = tcp_status
+        ping_result["tcp_fault"] = tcp_fault
+
+        results.append(ping_result)
+
+    return results
+
+
+
 def main():
     while True:
         print("\n===== Network Monitoring =====")
 
-        for device in devices:
-            name = device["name"]
-            host = device["host"]
-            device_type = device["type"]
-            port = device["tcp_port"]
+        results = monitor_all_devices()
 
-            print(f"\nDevice: {name}")    
-            print(f"Type: {device_type}")
-            print(f"IP Address: {host}")    
-
-            check_host(host)
-
-            print("\n--- TCP Port Monitoring ---")
-            tcp_status = check_tcp_port(host, port)
-
-            tcp_fault = detect_tcp_fault(tcp_status)
-            print(f"TCP Fault: {tcp_fault}")
+        print("\n===== Collected Ping Results =====")
+        print(results)
 
         print("\nWaiting 5 seconds before next check...")
         time.sleep(5)
 
 
+
 if __name__ == "__main__":
     main()
+    

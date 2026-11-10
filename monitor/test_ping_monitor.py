@@ -285,6 +285,61 @@ class TestPingMonitor(unittest.TestCase):
             ping_monitor.load_devices()
 
 
+    
+    @patch("monitor.ping_monitor.check_tcp_port")
+    @patch("monitor.ping_monitor.check_host")
+    def test_monitor_all_devices(self, mock_check_host, mock_check_tcp_port):
+
+        mock_devices = [
+            {
+                "name": "Google DNS",
+                "host": "8.8.8.8",
+                "type": "DNS Server",
+                "tcp_port": 443
+            },
+            {
+                "name": "Cloudflare DNS",
+                "host": "1.1.1.1",
+                "type": "DNS Server",
+                "tcp_port": 443
+            }
+        ]
+
+        mock_check_host.side_effect = [
+            {
+                "host": "8.8.8.8",
+                "status": "UP",
+                "latency": 10,
+                "packet_loss": 0,
+                "received": 4,
+                "fault": "No Fault"
+            },
+            {
+                "host": "1.1.1.1",
+                "status": "UP",
+                "latency": 20,
+                "packet_loss": 0,
+                "received": 4,
+                "fault": "No Fault"
+            }
+        ]
+
+        mock_check_tcp_port.side_effect = ["OPEN", "CLOSED"]
+
+        with patch.object(ping_monitor, "devices", mock_devices):
+            results = ping_monitor.monitor_all_devices()
+
+        self.assertEqual(len(results), 2)
+
+        self.assertEqual(results[0]["name"], "Google DNS")
+        self.assertEqual(results[0]["tcp_status"], "OPEN")
+        self.assertEqual(results[0]["tcp_fault"], "No Fault")
+
+        self.assertEqual(results[1]["name"], "Cloudflare DNS")
+        self.assertEqual(results[1]["tcp_status"], "CLOSED")
+        self.assertEqual(results[1]["tcp_fault"], "Service Unavailable")
+
+
 
 if __name__ == '__main__':
     unittest.main()
