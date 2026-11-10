@@ -1,0 +1,4 @@
+{
+    "latency_threshold": 200,
+    "packet_loss_threshold": 20
+}

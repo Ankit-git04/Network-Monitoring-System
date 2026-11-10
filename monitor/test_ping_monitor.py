@@ -139,8 +139,137 @@ class TestPingMonitor(unittest.TestCase):
             previous_tcp_status["google.com:443"],
             "CLOSED"
         )
-
     
+    def test_load_settings_valid(self):
+        settings = ping_monitor.load_settings()
+
+        self.assertEqual(settings["latency_threshold"], 200)
+        self.assertEqual(settings["packet_loss_threshold"], 20)
+
+    @patch("monitor.ping_monitor.json.load")
+    def test_load_settings_missing_key(self, mock_json_load):
+        mock_json_load.return_value = {
+            "latency_threshold": 200
+        }
+
+        with self.assertRaisesRegex(ValueError, "Missing setting"):
+            ping_monitor.load_settings()
+
+    @patch("monitor.ping_monitor.json.load")
+    def test_load_settings_invalid_type(self, mock_json_load):
+        mock_json_load.return_value = {
+            "latency_threshold": "200",
+            "packet_loss_threshold": 20
+        }
+
+        with self.assertRaisesRegex(ValueError, "must be a number"):
+            ping_monitor.load_settings()
+
+
+    @patch("monitor.ping_monitor.json.load")
+    def test_load_settings_invalid_latency(self, mock_json_load):
+        mock_json_load.return_value = {
+            "latency_threshold": 0,
+            "packet_loss_threshold": 20
+        }
+
+        with self.assertRaisesRegex(ValueError, "Latency threshold"):
+            ping_monitor.load_settings() 
+
+    @patch("monitor.ping_monitor.json.load")
+    def test_load_settings_invalid_packet_loss(self, mock_json_load):
+        mock_json_load.return_value = {
+            "latency_threshold": 200,
+            "packet_loss_threshold": 101
+        }
+
+        with self.assertRaisesRegex(ValueError, "Packet loss threshold"):
+            ping_monitor.load_settings()
+
+    @patch("monitor.ping_monitor.json.load")
+    def test_load_settings_invalid_structure(self, mock_json_load):
+        mock_json_load.return_value = [200, 20]
+
+        with self.assertRaisesRegex(ValueError, "Settings configuration must be a JSON object"):
+            ping_monitor.load_settings()
+    
+    @patch("monitor.ping_monitor.json.load")
+    def test_load_devices_invalid_structure(self, mock_json_load):
+        mock_json_load.return_value = {"name": "Google DNS"}
+
+        with self.assertRaisesRegex(ValueError, "Device configuration must be a list"):
+            ping_monitor.load_devices() 
+
+    @patch("monitor.ping_monitor.json.load")
+    def test_load_devices_missing_field(self, mock_json_load):
+        mock_json_load.return_value = [
+            {
+                "name": "Google DNS",
+                "host": "8.8.8.8",
+                "type": "DNS Server"
+            }
+        ]
+
+        with self.assertRaisesRegex(ValueError, "Missing field"):
+            ping_monitor.load_devices()
+
+    @patch("monitor.ping_monitor.json.load")
+    def test_load_devices_invalid_field_type(self, mock_json_load):
+        mock_json_load.return_value = [
+            {
+                "name": 123,
+                "host": "8.8.8.8",
+                "type": "DNS Server",
+                "tcp_port": 443
+            }
+        ]
+
+        with self.assertRaisesRegex(ValueError, "name.*non-empty string"):
+            ping_monitor.load_devices()
+
+    @patch("monitor.ping_monitor.json.load")
+    def test_load_devices_empty_host(self, mock_json_load):
+        mock_json_load.return_value = [
+            {
+                "name": "Google DNS",
+                "host": "",
+                "type": "DNS Server",
+                "tcp_port": 443
+            }
+        ]
+
+        with self.assertRaisesRegex(ValueError, "host.*non-empty string"):
+            ping_monitor.load_devices()
+
+    @patch("monitor.ping_monitor.json.load")
+    def test_load_devices_invalid_port(self, mock_json_load):
+        mock_json_load.return_value = [
+            {
+                "name": "Google DNS",
+                "host": "8.8.8.8",
+                "type": "DNS Server",
+                "tcp_port": 70000
+            }
+        ]
+
+        with self.assertRaisesRegex(ValueError, "TCP port"):
+            ping_monitor.load_devices()
+
+    @patch("monitor.ping_monitor.json.load")
+    def test_load_devices_boolean_port(self, mock_json_load):
+        mock_json_load.return_value = [
+            {
+                "name": "Google DNS",
+                "host": "8.8.8.8",
+                "type": "DNS Server",
+                "tcp_port": True
+            }
+        ]
+
+        with self.assertRaisesRegex(ValueError, "TCP port"):
+            ping_monitor.load_devices()
+
+
 
 if __name__ == '__main__':
     unittest.main()

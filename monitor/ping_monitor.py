@@ -4,19 +4,72 @@ import time
 import socket
 import json
 
+
+previous_status = {}
+previous_tcp_status = {}
+
+
 def load_devices():
     config_path = "config/devices.json"
 
     with open(config_path, "r") as file:
         devices = json.load(file)
 
+    if not isinstance(devices, list):
+        raise ValueError("Device configuration must be a list")
+
+    required_fields = ["name", "host", "type", "tcp_port"]
+
+    for device in devices:
+        if not isinstance(device, dict):
+           raise ValueError("Each device must be a JSON object")
+
+        for field in required_fields:
+           if field not in device:
+             raise ValueError(f"Missing field '{field}' in device configuration")
+
+        for field in ["name", "host", "type"]:
+           if not isinstance(device[field], str) or not device[field].strip():
+             raise ValueError(f"'{field}' must be a non-empty string")
+
+        if (not isinstance(device["tcp_port"], int) or isinstance(device["tcp_port"], bool) or not (1 <= device["tcp_port"] <= 65535)):
+             raise ValueError("TCP port must be an integer between 1 and 65535")
+
     return devices
 
+def load_settings():
+    config_path = "config/settings.json"
 
+    with open(config_path, "r") as file:
+        settings = json.load(file)
+
+    if not isinstance(settings, dict):
+        raise ValueError("Settings configuration must be a JSON object")
+
+    required_fields = ["latency_threshold", "packet_loss_threshold"]
+
+    for field in required_fields:
+      if field not in settings:
+        raise ValueError(f"Missing setting: {field}")
+    
+    for field in required_fields:
+      if not isinstance(settings[field], (int, float)) or isinstance(settings[field], bool):
+        raise ValueError(f"'{field}' must be a number")
+    
+    if settings["latency_threshold"] <= 0:
+        raise ValueError("Latency threshold must be greater than 0")
+    
+    if not (0 <= settings["packet_loss_threshold"] <= 100):
+        raise ValueError("Packet loss threshold must be between 0 and 100")
+
+    return settings
+
+
+
+settings = load_settings()
 devices = load_devices()
 
-previous_status = {}
-previous_tcp_status = {}
+
 
 def check_host(host):
     print(f"\nChecking {host}...")
@@ -51,10 +104,12 @@ def check_host(host):
                 print("Average latency: Could not determine")
 
             fault = detect_fault(
-                  "UP",
-            latency if latency_match else None,
-            packet_loss if loss_match else None
-                 )
+                "UP",
+                latency if latency_match else None,
+                packet_loss if loss_match else None,
+                latency_threshold=settings["latency_threshold"],
+                packet_loss_threshold=settings["packet_loss_threshold"]
+            )
 
             
             print(f"Fault: {fault}")
@@ -83,17 +138,19 @@ def check_host(host):
 
         return False
 
-def detect_fault(status, latency=None, packet_loss=None):
+def detect_fault(status, latency=None, packet_loss=None,
+                 latency_threshold=200, packet_loss_threshold=20):
+
     if status == "DOWN":
         return "Connectivity Fault"
 
     if status == "TIMEOUT":
         return "Timeout Fault"
 
-    if packet_loss is not None and packet_loss > 20:
-        return "High Packet Loss"
+    if packet_loss is not None and packet_loss > packet_loss_threshold:
+       return "High Packet Loss"
 
-    if latency is not None and latency > 200:
+    if latency is not None and latency > latency_threshold:
         return "High Latency"
 
     return "No Fault"  
