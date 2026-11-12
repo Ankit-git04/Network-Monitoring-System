@@ -24,7 +24,7 @@ timeout /t 2 /nobreak > nul
 
 :: 4. Start Python Monitoring Engine
 echo [4/4] Starting Python Monitoring Engine...
-start "NMS Python Engine" cmd /k "cd /d ""%~dp0"" && ""%~dp0monitor\venv\Scripts\python.exe"" -u -m monitor.ping_monitor"
+start "NMS Python Engine" /D "%~dp0" cmd /k ""%~dp0monitor\venv\Scripts\python.exe" -u -m monitor.ping_monitor"
 
 echo.
 echo ==========================================================
