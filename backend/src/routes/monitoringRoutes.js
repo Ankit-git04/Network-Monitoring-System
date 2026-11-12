@@ -5,13 +5,15 @@ const validateMonitoring = require('../middleware/validateMonitoring');
 const {
   createMonitoring,
   getMonitoring,
+  getChartData,
   getLatestMonitoring,
   getMonitoringByHost,
   getHostAnalytics,
 } = require('../controllers/monitoringController');
 
-// NOTE: /latest must come before /:host to avoid route conflict
+// NOTE: named routes (/latest, /chart) must come before /:host to avoid route conflict
 router.get('/latest', getLatestMonitoring);
+router.get('/chart', getChartData);
 router.get('/:host/analytics', getHostAnalytics);
 router.get('/:host', getMonitoringByHost);
 router.get('/', getMonitoring);

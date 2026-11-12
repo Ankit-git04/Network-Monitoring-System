@@ -1,4 +1,5 @@
 const Device = require("../models/Device");
+const Monitoring = require("../models/Monitoring");
 
 /**
  * GET /api/devices
@@ -111,6 +112,79 @@ const updateDevice = async (req, res, next) => {
 };
 
 /**
+ * GET /api/devices/stats
+ * Returns KPI counts using ONLY registered devices as the population.
+ *
+ * Invariant guaranteed server-side:
+ *   total === up + down + pending
+ *
+ * Root cause this was added to fix:
+ *   The old frontend calculated UP/DOWN from /api/monitoring/latest which
+ *   returns records for ALL hosts ever seen, including deleted devices.
+ *   That produced UP > Total when stale monitoring records outnumbered
+ *   registered devices (e.g. 6 UP shown for 5 registered devices).
+ */
+const getDeviceStats = async (req, res, next) => {
+  try {
+    // 1. Fetch the authoritative device list from MongoDB
+    const devices = await Device.find({}, { host: 1 });
+    const total = devices.length;
+
+    if (total === 0) {
+      return res.json({
+        success: true,
+        data: { total: 0, up: 0, down: 0, pending: 0, availability: 0, avg_latency: null },
+      });
+    }
+
+    // 2. Fetch the latest monitoring record for each host in the system
+    const latestByHost = await Monitoring.aggregate([
+      { $sort: { timestamp: -1 } },
+      { $group: { _id: "$host", status: { $first: "$status" }, latency: { $first: "$latency" } } },
+    ]);
+
+    // 3. Build a lookup map keyed by host
+    const monMap = {};
+    latestByHost.forEach((m) => { monMap[m._id] = m; });
+
+    // 4. Count KPIs strictly over registered devices only
+    let up = 0;
+    let down = 0;
+    let pending = 0;
+    const validLatencies = [];
+
+    devices.forEach((device) => {
+      const mon = monMap[device.host];
+      if (!mon || !mon.status) {
+        pending++;
+      } else if (mon.status === "UP") {
+        up++;
+        if (mon.latency !== null && mon.latency !== undefined) {
+          validLatencies.push(mon.latency);
+        }
+      } else if (mon.status === "DOWN" || mon.status === "TIMEOUT") {
+        down++;
+      } else {
+        pending++;
+      }
+    });
+
+    const availability = parseFloat(((up / total) * 100).toFixed(1));
+    const avg_latency =
+      validLatencies.length > 0
+        ? Math.round(validLatencies.reduce((a, b) => a + b, 0) / validLatencies.length)
+        : null;
+
+    res.json({
+      success: true,
+      data: { total, up, down, pending, availability, avg_latency },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
  * DELETE /api/devices/:id
  * Delete a device.
  */
@@ -132,6 +206,7 @@ const deleteDevice = async (req, res, next) => {
 module.exports = {
   getDevices,
   getDeviceById,
+  getDeviceStats,
   createDevice,
   updateDevice,
   deleteDevice,

@@ -37,7 +37,9 @@ def send_monitoring_result(result: dict) -> bool:
             "tcp_port": result.get("tcp_port"),
             "fault": result.get("fault", "No Fault"),
             "tcp_fault": result.get("tcp_fault", "No Fault"),
-            "timestamp": datetime.now().isoformat()
+            # Use UTC ISO-8601 with explicit 'Z' suffix so MongoDB stores
+            # the timestamp correctly regardless of server timezone.
+            "timestamp": datetime.utcnow().isoformat() + "Z"
         }
 
         response = requests.post(

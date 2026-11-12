@@ -122,6 +122,7 @@ const createMonitoring = async (req, res, next) => {
 /**
  * GET /api/monitoring
  * Query params: ?limit=100 (default 100), ?host=<host>
+ * Returns records sorted newest-first (for history/analytics use).
  */
 const getMonitoring = async (req, res, next) => {
   try {
@@ -134,6 +135,60 @@ const getMonitoring = async (req, res, next) => {
     const records = await Monitoring.find(filter)
       .sort({ timestamp: -1 })
       .limit(limit);
+
+    res.json({ success: true, count: records.length, data: records });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * GET /api/monitoring/chart
+ * Purpose-built endpoint for dashboard charts (Latency & Packet Loss).
+ *
+ * Root cause this endpoint was added to fix:
+ *   The old dashboard called GET /api/monitoring?limit=100 which returned
+ *   records sorted newest→oldest across ALL hosts. With 5 devices × 5s polling
+ *   each device only appeared ~20 times in the 100-record window (100/5 devices),
+ *   covering ~100s of history. The charts then called .slice(-50) on the array
+ *   which picked the OLDEST 50 of the 100 newest, displaying data that was
+ *   up to 5+ minutes stale. At times with accumulated history (734+ records),
+ *   the visible window drifted even further into the past.
+ *
+ * Fix: This endpoint uses an aggregation pipeline to fetch the latest N records
+ * PER HOST sorted oldest→newest so Recharts plots them in chronological order.
+ * Query params:
+ *   ?perHost=20   - records per host to include (default 20, covers 100s at 5s interval)
+ *   ?minutes=10   - only return records from the last N minutes (default 10)
+ */
+const getChartData = async (req, res, next) => {
+  try {
+    const perHost = Math.min(parseInt(req.query.perHost) || 20, 100);
+    const minutes = Math.min(parseInt(req.query.minutes) || 10, 60);
+    const since = new Date(Date.now() - minutes * 60 * 1000);
+
+    // Aggregate: for each host get the latest `perHost` records within the time window
+    const pipeline = [
+      { $match: { timestamp: { $gte: since } } },
+      { $sort: { host: 1, timestamp: -1 } },
+      {
+        $group: {
+          _id: "$host",
+          records: { $push: "$$ROOT" },
+        },
+      },
+      {
+        $project: {
+          records: { $slice: ["$records", perHost] },
+        },
+      },
+      { $unwind: "$records" },
+      { $replaceRoot: { newRoot: "$records" } },
+      // Final sort: oldest first so Recharts draws left→right chronologically
+      { $sort: { timestamp: 1 } },
+    ];
+
+    const records = await Monitoring.aggregate(pipeline);
 
     res.json({ success: true, count: records.length, data: records });
   } catch (err) {
@@ -257,6 +312,7 @@ const getHostAnalytics = async (req, res, next) => {
 module.exports = {
   createMonitoring,
   getMonitoring,
+  getChartData,
   getLatestMonitoring,
   getMonitoringByHost,
   getHostAnalytics,

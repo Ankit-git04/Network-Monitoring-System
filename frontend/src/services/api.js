@@ -22,6 +22,7 @@ api.interceptors.response.use(
 
 export const monitoringAPI = {
   getLatest: () => api.get("/api/monitoring/latest"),
+  getChart: (params) => api.get("/api/monitoring/chart", { params }),
   getHistory: (host) => api.get(`/api/monitoring/${encodeURIComponent(host)}`),
   getAnalytics: (host) => api.get(`/api/monitoring/${encodeURIComponent(host)}/analytics`),
   getAll: (params) => api.get("/api/monitoring", { params }),
@@ -29,6 +30,7 @@ export const monitoringAPI = {
 
 export const deviceAPI = {
   getAll: () => api.get("/api/devices"),
+  getStats: () => api.get("/api/devices/stats"),
   getById: (id) => api.get(`/api/devices/${id}`),
   create: (data) => api.post("/api/devices", data),
   update: (id, data) => api.put(`/api/devices/${id}`, data),
