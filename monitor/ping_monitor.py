@@ -3,7 +3,16 @@ import re
 import time
 import socket
 import json
+import os
+import requests
 from monitor.history import save_monitoring_result
+
+
+# Backend API configuration for dynamic device and settings management
+BACKEND_URL = os.environ.get("NMS_BACKEND_URL", "http://localhost:5000")
+DEVICES_API_URL = f"{BACKEND_URL}/api/devices"
+SETTINGS_API_URL = f"{BACKEND_URL}/api/settings"
+DEVICE_REFRESH_INTERVAL = int(os.environ.get("NMS_DEVICE_REFRESH_INTERVAL", "30"))
 
 
 previous_status = {}
@@ -11,6 +20,10 @@ previous_tcp_status = {}
 
 
 def load_devices():
+    """
+    Load devices from local config/devices.json.
+    Preserved for backward-compatibility, fallback, and unit tests.
+    """
     config_path = "config/devices.json"
 
     with open(config_path, "r") as file:
@@ -37,6 +50,130 @@ def load_devices():
              raise ValueError("TCP port must be an integer between 1 and 65535")
 
     return devices
+
+
+def validate_device(device):
+    """
+    Validate that a device object has all required fields and valid types.
+    Returns True if valid, False otherwise.
+    """
+    if not isinstance(device, dict):
+        return False
+
+    required_fields = ["name", "host", "type", "tcp_port"]
+    for field in required_fields:
+        if field not in device:
+            return False
+
+    for field in ["name", "host", "type"]:
+        val = device.get(field)
+        if not isinstance(val, str) or not val.strip():
+            return False
+
+    port = device.get("tcp_port")
+    if not isinstance(port, int) or isinstance(port, bool) or not (1 <= port <= 65535):
+        return False
+
+    return True
+
+
+def fetch_devices_from_api(api_url=None, timeout=5):
+    """
+    Fetch device list from the backend REST API (MongoDB single source of truth).
+    Returns a list of validated, deduplicated device dicts if successful,
+    or None if the API call fails (retaining last known device list).
+    """
+    url = api_url or DEVICES_API_URL
+    try:
+        response = requests.get(url, timeout=timeout)
+        if response.status_code == 200:
+            data = response.json()
+            raw_devices = data.get("data", []) if isinstance(data, dict) else data
+            if isinstance(raw_devices, list):
+                valid_devices = []
+                seen_keys = set()
+                for d in raw_devices:
+                    if validate_device(d):
+                        key = f"{d['host'].strip()}:{d['tcp_port']}"
+                        if key not in seen_keys:
+                            seen_keys.add(key)
+                            valid_devices.append({
+                                "_id": str(d.get("_id", "")),
+                                "name": d["name"].strip(),
+                                "host": d["host"].strip(),
+                                "type": d["type"].strip(),
+                                "tcp_port": int(d["tcp_port"]),
+                            })
+                    else:
+                        print(f"Warning: Skipping invalid device from API: {d}")
+                return valid_devices
+            else:
+                print(f"Warning: Unexpected API response format: {type(raw_devices)}")
+                return None
+        else:
+            print(f"Warning: Backend returned status {response.status_code} while fetching devices")
+            return None
+    except requests.exceptions.RequestException as e:
+        print(f"Warning: Could not fetch devices from backend: {e}")
+        return None
+    except Exception as e:
+        print(f"Warning: Unexpected error fetching devices from backend: {e}")
+        return None
+
+
+def update_devices_from_backend():
+    """
+    Attempt to refresh the global devices list from the backend API (MongoDB).
+    If the backend is unreachable or returns None, preserves the current devices list.
+    """
+    global devices
+    api_devices = fetch_devices_from_api()
+    if api_devices is not None:
+        devices = api_devices
+        print(f"[Device Sync] Loaded {len(devices)} active device(s) from MongoDB.")
+        return True
+    else:
+        print(f"[Device Sync] Backend unavailable; retaining current {len(devices)} device(s).")
+        return False
+
+
+def fetch_settings_from_api(api_url=None, timeout=5):
+    """
+    Fetch monitoring thresholds from the backend REST API.
+    Returns dict with latency_threshold and packet_loss_threshold, or None on failure.
+    """
+    url = api_url or SETTINGS_API_URL
+    try:
+        response = requests.get(url, timeout=timeout)
+        if response.status_code == 200:
+            data = response.json()
+            raw = data.get("data", {}) if isinstance(data, dict) else data
+            if isinstance(raw, dict):
+                lat = raw.get("latency_threshold")
+                loss = raw.get("packet_loss_threshold")
+                if isinstance(lat, (int, float)) and lat > 0 and isinstance(loss, (int, float)) and 0 <= loss <= 100:
+                    return {
+                        "latency_threshold": lat,
+                        "packet_loss_threshold": loss,
+                    }
+        return None
+    except Exception as e:
+        print(f"Warning: Could not fetch settings from backend: {e}")
+        return None
+
+
+def update_settings_from_backend():
+    """
+    Attempt to refresh global threshold settings from backend API.
+    """
+    global settings
+    api_settings = fetch_settings_from_api()
+    if api_settings is not None:
+        settings.update(api_settings)
+        print(f"[Settings Sync] Applied thresholds from MongoDB: Latency={settings['latency_threshold']}ms, Packet Loss={settings['packet_loss_threshold']}%")
+        return True
+    return False
+
 
 def load_settings():
     config_path = "config/settings.json"
@@ -66,10 +203,9 @@ def load_settings():
     return settings
 
 
-
+# Initial devices and settings loaded from local config as baseline/fallback
 settings = load_settings()
 devices = load_devices()
-
 
 
 def check_host(host):
@@ -95,7 +231,6 @@ def check_host(host):
             latency_match = re.search(r"Average\s*=\s*(\d+)\s*ms",result.stdout,re.IGNORECASE)
 
             print(f"Status: {status}")
-            
 
             if received_match and loss_match:
                 received = int(received_match.group(1))
@@ -118,17 +253,16 @@ def check_host(host):
                 packet_loss_threshold=settings["packet_loss_threshold"]
             )
 
-            
             print(f"Fault: {fault}")
-            
+
             return {
-                    "host": host,
-                    "status": status,
-                    "latency": latency,
-                    "packet_loss": packet_loss,
-                    "received": received,
-                    "fault": fault
-                }
+                "host": host,
+                "status": status,
+                "latency": latency,
+                "packet_loss": packet_loss,
+                "received": received,
+                "fault": fault
+            }
 
         else:
             track_recovery(host, "DOWN")
@@ -164,13 +298,14 @@ def check_host(host):
         print(f"Fault: {fault}")
 
         return {
-                "host": host,
-                "status": status,
-                "latency": latency,
-                "packet_loss": packet_loss,
-                "received": received,
-                "fault": fault
-            }
+            "host": host,
+            "status": status,
+            "latency": latency,
+            "packet_loss": packet_loss,
+            "received": received,
+            "fault": fault
+        }
+
 
 def detect_fault(status, latency=None, packet_loss=None,
                  latency_threshold=200, packet_loss_threshold=20):
@@ -198,7 +333,6 @@ def track_recovery(host, current_status):
             print(f"FAULT RECOVERED: {host}")
 
     previous_status[host] = current_status   
-
 
 
 def track_tcp_recovery(host, port, current_status):
@@ -249,10 +383,15 @@ def detect_tcp_fault(tcp_status):
     return "No Fault"
 
 
-def monitor_all_devices():
+def monitor_all_devices(target_devices=None):
+    device_list = target_devices if target_devices is not None else devices
     results = []
 
-    for device in devices:
+    if not device_list:
+        print("\nNo devices configured for monitoring.")
+        return results
+
+    for device in device_list:
         name = device["name"]
         host = device["host"]
         device_type = device["type"]
@@ -284,12 +423,39 @@ def monitor_all_devices():
     return results
 
 
-
 def main():
+    global devices
+    print("\n===== NMS Network Monitoring Engine Started =====")
+    print(f"Backend API URL: {DEVICES_API_URL}")
+    print(f"Settings API URL: {SETTINGS_API_URL}")
+    print(f"Device Refresh Interval: {DEVICE_REFRESH_INTERVAL}s")
+
+    # Initial device & settings synchronization from MongoDB
+    update_devices_from_backend()
+    update_settings_from_backend()
+    last_device_refresh = time.time()
+
     while True:
+        # Check if it is time to refresh device list & settings from MongoDB
+        current_time = time.time()
+        if current_time - last_device_refresh >= DEVICE_REFRESH_INTERVAL:
+            print("\n[Sync Cycle] Refreshing device inventory and settings from MongoDB backend...")
+            update_devices_from_backend()
+            update_settings_from_backend()
+            last_device_refresh = current_time
+
         print("\n===== Network Monitoring =====")
 
         results = monitor_all_devices()
+
+        # Send results to backend (lazy import to avoid affecting tests)
+        if results:
+            try:
+                from monitor.reporter import send_all_results
+                report = send_all_results(results)
+                print(f"Backend sync: {report['sent']} sent, {report['failed']} failed")
+            except ImportError:
+                pass
 
         print("\n===== Collected Ping Results =====")
         print(results)
@@ -298,6 +464,6 @@ def main():
         time.sleep(5)
 
 
-
 if __name__ == "__main__":
     main()
+
